@@ -9,9 +9,13 @@
         "noImplicitAny": false,
         "outDir": "./built/",
         "target": "es5",
+        "moduleResolution": "node",
         "sourceMap": true
     },
     "files": [
         "src/directLine.ts"
+    ],
+    "exclude": [
+      "node_modules"
     ]
 }

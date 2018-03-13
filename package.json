@@ -20,6 +20,8 @@
   "author": "Microsoft Corp",
   "license": "MIT",
   "dependencies": {
+    "@types/node": "^9.4.7",
+    "mqtt": "^2.16.0",
     "rxjs": "^5.0.3"
   },
   "devDependencies": {

@@ -25,6 +25,8 @@ import 'rxjs/add/observable/interval';
 import 'rxjs/add/observable/of';
 import 'rxjs/add/observable/throw';
 
+import { connect } from 'mqtt';
+
 // Direct Line 3.0 types
 
 export interface Conversation {
@@ -48,7 +50,7 @@ export interface UnknownMedia{
     contentType: string,
     contentUrl: string,
     name?: string,
-    thumbnailUrl?: string    
+    thumbnailUrl?: string
 }
 
 export type CardActionTypes = "openUrl" | "imBack" | "postBack" | "playAudio" | "playVideo" | "showImage" | "downloadFile" | "signin" | "call";
@@ -301,7 +303,7 @@ export class DirectLine implements IBotConnection {
     constructor(options: DirectLineOptions) {
         this.secret = options.secret;
         this.token = options.secret || options.token;
-        this.webSocket = (options.webSocket === undefined ? true : options.webSocket) && typeof WebSocket !== 'undefined' && WebSocket !== undefined; 
+        this.webSocket = (options.webSocket === undefined ? true : options.webSocket) && typeof WebSocket !== 'undefined' && WebSocket !== undefined;
 
         if (options.domain)
             this.domain = options.domain;
@@ -309,13 +311,13 @@ export class DirectLine implements IBotConnection {
             this.conversationId = options.conversationId;
         }
         if (options.watermark) {
-            if (this.webSocket) 
+            if (this.webSocket)
                 console.warn("Watermark was ignored: it is not supported using websockets at the moment");
             else
                 this.watermark =  options.watermark;
         }
         if (options.streamUrl) {
-            if (options.token && options.conversationId) 
+            if (options.token && options.conversationId)
                 this.streamUrl = options.streamUrl;
             else
                 console.warn("streamUrl was ignored: you need to provide a token and a conversationid");
@@ -358,7 +360,7 @@ export class DirectLine implements IBotConnection {
                 }
             }
             else {
-                return Observable.of(connectionStatus);            
+                return Observable.of(connectionStatus);
             }
         })
         .filter(connectionStatus => connectionStatus != ConnectionStatus.Uninitialized && connectionStatus != ConnectionStatus.Connecting)
@@ -389,8 +391,8 @@ export class DirectLine implements IBotConnection {
 
     private startConversation() {
         //if conversationid is set here, it means we need to call the reconnect api, else it is a new conversation
-        const url = this.conversationId 
-            ? `${this.domain}/conversations/${this.conversationId}?watermark=${this.watermark}` 
+        const url = this.conversationId
+            ? `${this.domain}/conversations/${this.conversationId}?watermark=${this.watermark}`
             : `${this.domain}/conversations`;
         const method = this.conversationId ? "GET" : "POST";
 
@@ -606,33 +608,67 @@ export class DirectLine implements IBotConnection {
     private observableWebSocket<T>() {
         return Observable.create((subscriber: Subscriber<T>) => {
             konsole.log("creating WebSocket", this.streamUrl);
-            const ws = new WebSocket(this.streamUrl);
+
+            const client = connect(this.streamUrl);
+
             let sub: Subscription;
 
-            ws.onopen = open => {
-                konsole.log("WebSocket open", open);
+            client.on('connect', () => {
+                konsole.log("WebSocket open");
+
+                client.subscribe(this.conversationId)
+
                 // Chrome is pretty bad at noticing when a WebSocket connection is broken.
                 // If we periodically ping the server with empty messages, it helps Chrome
                 // realize when connection breaks, and close the socket. We then throw an
                 // error, and that give us the opportunity to attempt to reconnect.
-                sub = Observable.interval(timeout).subscribe(_ => ws.send(""));
-            }
+                // sub = Observable.interval(timeout).subscribe(_ => {
+                //   client.publish('mqtt', JSON.stringify('ping'))
+                // });
+            })
 
-            ws.onclose = close => {
-                konsole.log("WebSocket close", close);
+            client.on('close', () => {
+                konsole.log("WebSocket close");
                 if (sub) sub.unsubscribe();
                 subscriber.error(close);
-            }
+            })
 
-            ws.onmessage = message => message.data && subscriber.next(JSON.parse(message.data));
+            client.on('message', (topic, message) => {
+              subscriber.next(JSON.parse(message.toString()))
+            })
 
-            // This is the 'unsubscribe' method, which is called when this observable is disposed.
-            // When the WebSocket closes itself, we throw an error, and this function is eventually called.
-            // When the observable is closed first (e.g. when tearing down a WebChat instance) then
-            // we need to manually close the WebSocket.
-            return () => {
-                if (ws.readyState === 0 || ws.readyState === 1) ws.close();
-            }
+            return () => { client.end() }
+
+            // ws.onmessage = message => message.data && subscriber.next(JSON.parse(message.data));
+
+            // const ws = new WebSocket(this.streamUrl);
+
+            // let sub: Subscription;
+
+            // ws.onopen = open => {
+            //     konsole.log("WebSocket open", open);
+            //     // Chrome is pretty bad at noticing when a WebSocket connection is broken.
+            //     // If we periodically ping the server with empty messages, it helps Chrome
+            //     // realize when connection breaks, and close the socket. We then throw an
+            //     // error, and that give us the opportunity to attempt to reconnect.
+            //     sub = Observable.interval(timeout).subscribe(_ => ws.send(""));
+            // }
+
+            // ws.onclose = close => {
+            //     konsole.log("WebSocket close", close);
+            //     if (sub) sub.unsubscribe();
+            //     subscriber.error(close);
+            // }
+
+            // ws.onmessage = message => message.data && subscriber.next(JSON.parse(message.data));
+
+            // // This is the 'unsubscribe' method, which is called when this observable is disposed.
+            // // When the WebSocket closes itself, we throw an error, and this function is eventually called.
+            // // When the observable is closed first (e.g. when tearing down a WebChat instance) then
+            // // we need to manually close the WebSocket.
+            // return () => {
+            //     if (ws.readyState === 0 || ws.readyState === 1) ws.close();
+            // }
         }) as Observable<T>
     }
 
