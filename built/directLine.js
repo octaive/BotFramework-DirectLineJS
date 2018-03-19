@@ -351,7 +351,7 @@ var DirectLine = /** @class */ (function () {
             client.on('connect', function () {
                 konsole.log("WebSocket open");
                 client.subscribe(_this.conversationId, {
-                    qos: 2
+                    qos: 1
                 });
                 // Chrome is pretty bad at noticing when a WebSocket connection is broken.
                 // If we periodically ping the server with empty messages, it helps Chrome

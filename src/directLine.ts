@@ -617,7 +617,7 @@ export class DirectLine implements IBotConnection {
                 konsole.log("WebSocket open");
 
                 client.subscribe(this.conversationId, {
-                  qos: 2
+                  qos: 1
                 })
 
                 // Chrome is pretty bad at noticing when a WebSocket connection is broken.
